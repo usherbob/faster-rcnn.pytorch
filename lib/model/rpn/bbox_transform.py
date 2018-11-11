@@ -12,24 +12,26 @@ import torch
 import numpy as np
 import pdb
 
+## get regression coefficients
 def bbox_transform(ex_rois, gt_rois):
-    ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
-    ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0
-    ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
+    ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0##width
+    ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0##height
+    ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths##center
     ex_ctr_y = ex_rois[:, 1] + 0.5 * ex_heights
 
-    gt_widths = gt_rois[:, 2] - gt_rois[:, 0] + 1.0
+    gt_widths = gt_rois[:, 2] - gt_rois[:, 0] + 1.0##ground truth
     gt_heights = gt_rois[:, 3] - gt_rois[:, 1] + 1.0
     gt_ctr_x = gt_rois[:, 0] + 0.5 * gt_widths
     gt_ctr_y = gt_rois[:, 1] + 0.5 * gt_heights
 
-    targets_dx = (gt_ctr_x - ex_ctr_x) / ex_widths
+	##regression coefficients
+    targets_dx = (gt_ctr_x - ex_ctr_x) / ex_widths 
     targets_dy = (gt_ctr_y - ex_ctr_y) / ex_heights
     targets_dw = torch.log(gt_widths / ex_widths)
     targets_dh = torch.log(gt_heights / ex_heights)
 
     targets = torch.stack(
-        (targets_dx, targets_dy, targets_dw, targets_dh),1)
+        (targets_dx, targets_dy, targets_dw, targets_dh),1) ##stack them,在第二个维度上
 
     return targets
 
@@ -46,7 +48,7 @@ def bbox_transform_batch(ex_rois, gt_rois):
         gt_ctr_x = gt_rois[:, :, 0] + 0.5 * gt_widths
         gt_ctr_y = gt_rois[:, :, 1] + 0.5 * gt_heights
 
-        targets_dx = (gt_ctr_x - ex_ctr_x.view(1,-1).expand_as(gt_ctr_x)) / ex_widths
+        targets_dx = (gt_ctr_x - ex_ctr_x.view(1,-1).expand_as(gt_ctr_x)) / ex_widths ###将一个多行的Tensor,拼接成一行(torch)
         targets_dy = (gt_ctr_y - ex_ctr_y.view(1,-1).expand_as(gt_ctr_y)) / ex_heights
         targets_dw = torch.log(gt_widths / ex_widths.view(1,-1).expand_as(gt_widths))
         targets_dh = torch.log(gt_heights / ex_heights.view(1,-1).expand_as(gt_heights))
@@ -70,7 +72,7 @@ def bbox_transform_batch(ex_rois, gt_rois):
         raise ValueError('ex_roi input dimension is not correct.')
 
     targets = torch.stack(
-        (targets_dx, targets_dy, targets_dw, targets_dh),2)
+        (targets_dx, targets_dy, targets_dw, targets_dh),2)##在第三个维度上stack
 
     return targets
 
@@ -80,12 +82,12 @@ def bbox_transform_inv(boxes, deltas, batch_size):
     ctr_x = boxes[:, :, 0] + 0.5 * widths
     ctr_y = boxes[:, :, 1] + 0.5 * heights
 
-    dx = deltas[:, :, 0::4]
+    dx = deltas[:, :, 0::4]## step = 4
     dy = deltas[:, :, 1::4]
     dw = deltas[:, :, 2::4]
     dh = deltas[:, :, 3::4]
 
-    pred_ctr_x = dx * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
+    pred_ctr_x = dx * widths.unsqueeze(2) + ctr_x.unsqueeze(2)##扩展torchTensor中的第二维
     pred_ctr_y = dy * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
     pred_w = torch.exp(dw) * widths.unsqueeze(2)
     pred_h = torch.exp(dh) * heights.unsqueeze(2)
@@ -101,7 +103,7 @@ def bbox_transform_inv(boxes, deltas, batch_size):
     pred_boxes[:, :, 3::4] = pred_ctr_y + 0.5 * pred_h
 
     return pred_boxes
-
+##暂时看到这里
 def clip_boxes_batch(boxes, im_shape, batch_size):
     """
     Clip boxes to image boundaries.
@@ -246,7 +248,8 @@ def bbox_overlaps_batch(anchors, gt_boxes):
         ih[ih < 0] = 0
         ua = anchors_area + gt_boxes_area - (iw * ih)
 
-        overlaps = iw * ih / ua
+        overlaps = anchors_area/gt_boxes_area*(iw * ih) / ua
+		
 
         # mask the overlap here.
         overlaps.masked_fill_(gt_area_zero.view(batch_size, 1, K).expand(batch_size, N, K), 0)
