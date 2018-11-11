@@ -72,7 +72,7 @@ class _AnchorTargetLayer(nn.Module):
                                   shift_x.ravel(), shift_y.ravel())).transpose())
         shifts = shifts.contiguous().type_as(rpn_cls_score).float()
 
-        A = self._num_anchors
+        A = self._num_anchors##A=9
         K = shifts.size(0)##feature map的w*h
 
         self._anchors = self._anchors.type_as(gt_boxes) # move to specific gpu.
@@ -93,15 +93,16 @@ class _AnchorTargetLayer(nn.Module):
 
         # label: 1 is positive, 0 is negative, -1 is dont care
         labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1)
-        bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
+        bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()##batch_size * size(inds_inside) inds_inside represent anchors stay
         bbox_outside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
 
-        overlaps = bbox_overlaps_batch(anchors, gt_boxes)##这里用到了batch
+        overlaps = bbox_overlaps_batch(anchors, gt_boxes)##这里用到了overlap_batch
 
         max_overlaps, argmax_overlaps = torch.max(overlaps, 2)##2代表dimension第三维度
         gt_max_overlaps, _ = torch.max(overlaps, 1)##1代表行
 
         if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
+	## TRAIN.RPN_CLOBBER_POSITIVES If an anchor statisfied by positive and negative conditions set to negative
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
 
         gt_max_overlaps[gt_max_overlaps==0] = 1e-5
@@ -116,7 +117,7 @@ class _AnchorTargetLayer(nn.Module):
         if cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
 
-        num_fg = int(cfg.TRAIN.RPN_FG_FRACTION * cfg.TRAIN.RPN_BATCHSIZE)
+        num_fg = int(cfg.TRAIN.RPN_FG_FRACTION * cfg.TRAIN.RPN_BATCHSIZE)## number of foreground
 
         sum_fg = torch.sum((labels == 1).int(), 1)
         sum_bg = torch.sum((labels == 0).int(), 1)
@@ -148,9 +149,9 @@ class _AnchorTargetLayer(nn.Module):
         offset = torch.arange(0, batch_size)*gt_boxes.size(1)
 
         argmax_overlaps = argmax_overlaps + offset.view(batch_size, 1).type_as(argmax_overlaps)
-        bbox_targets = _compute_targets_batch(anchors, gt_boxes.view(-1,5)[argmax_overlaps.view(-1), :].view(batch_size, -1, 5))
+        bbox_targets = _compute_targets_batch(anchors, gt_boxes.view(-1,5)[argmax_overlaps.view(-1), :].view(batch_size, -1, 5))##bbox 的回归目标
 
-        # use a single value instead of 4 values for easy index.
+        # use a single value instead of 4 values for easy index.RPN_BBOX_INSIDE_WEIGHTS=(1.0,1.0,1.0,1.0)
         bbox_inside_weights[labels==1] = cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS[0]
 
         if cfg.TRAIN.RPN_POSITIVE_WEIGHT < 0:
@@ -160,11 +161,12 @@ class _AnchorTargetLayer(nn.Module):
         else:
             assert ((cfg.TRAIN.RPN_POSITIVE_WEIGHT > 0) &
                     (cfg.TRAIN.RPN_POSITIVE_WEIGHT < 1))
-
+	## 为正负样本赋权重
         bbox_outside_weights[labels == 1] = positive_weights
         bbox_outside_weights[labels == 0] = negative_weights
 
         labels = _unmap(labels, total_anchors, inds_inside, batch_size, fill=-1)
+	#Unmap a subset of item (data) back to the original set of items (of size count)
         bbox_targets = _unmap(bbox_targets, total_anchors, inds_inside, batch_size, fill=0)
         bbox_inside_weights = _unmap(bbox_inside_weights, total_anchors, inds_inside, batch_size, fill=0)
         bbox_outside_weights = _unmap(bbox_outside_weights, total_anchors, inds_inside, batch_size, fill=0)
@@ -191,8 +193,8 @@ class _AnchorTargetLayer(nn.Module):
                             .permute(0,3,1,2).contiguous()
         outputs.append(bbox_outside_weights)
 
-        return outputs
-
+        return outputs##outputs include labels, bbox_targets, inside_weights and outside_weights, what are they???
+	## inside_weights, outside_weights 什么作用？？
     def backward(self, top, propagate_down, bottom):
         """This layer does not propagate gradients."""
         pass
