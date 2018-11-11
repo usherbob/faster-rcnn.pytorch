@@ -55,7 +55,7 @@ class _AnchorTargetLayer(nn.Module):
 
         rpn_cls_score = input[0]
         gt_boxes = input[1]
-        im_info = input[2]
+        im_info = input[2]##这个image info里面是原图信息
         num_boxes = input[3]
 
         # map of shape (..., H, W)
@@ -64,6 +64,7 @@ class _AnchorTargetLayer(nn.Module):
         batch_size = gt_boxes.size(0)
 
         feat_height, feat_width = rpn_cls_score.size(2), rpn_cls_score.size(3)
+		### 将原图与featuremap的_feat_stride关联起来，featuremap的行坐标为0，feat_width,列坐标为0，feat_height，乘16后就是对应的原图坐标，高级
         shift_x = np.arange(0, feat_width) * self._feat_stride
         shift_y = np.arange(0, feat_height) * self._feat_stride
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)
@@ -72,14 +73,14 @@ class _AnchorTargetLayer(nn.Module):
         shifts = shifts.contiguous().type_as(rpn_cls_score).float()
 
         A = self._num_anchors
-        K = shifts.size(0)
+        K = shifts.size(0)##feature map的w*h
 
         self._anchors = self._anchors.type_as(gt_boxes) # move to specific gpu.
-        all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
+        all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)###只需要将（0，0）处的九个框画出来了，其他的框就可以在它的基础上加坐标就好了，明白了
         all_anchors = all_anchors.view(K * A, 4)
 
         total_anchors = int(K * A)
-
+		##去掉不在原图中的anchors
         keep = ((all_anchors[:, 0] >= -self._allowed_border) &
                 (all_anchors[:, 1] >= -self._allowed_border) &
                 (all_anchors[:, 2] < long(im_info[0][1]) + self._allowed_border) &
@@ -95,10 +96,10 @@ class _AnchorTargetLayer(nn.Module):
         bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
         bbox_outside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
 
-        overlaps = bbox_overlaps_batch(anchors, gt_boxes)
+        overlaps = bbox_overlaps_batch(anchors, gt_boxes)##这里用到了batch
 
-        max_overlaps, argmax_overlaps = torch.max(overlaps, 2)
-        gt_max_overlaps, _ = torch.max(overlaps, 1)
+        max_overlaps, argmax_overlaps = torch.max(overlaps, 2)##2代表dimension第三维度
+        gt_max_overlaps, _ = torch.max(overlaps, 1)##1代表行
 
         if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0

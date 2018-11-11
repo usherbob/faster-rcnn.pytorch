@@ -18,14 +18,14 @@ class _RPN(nn.Module):
     """ region proposal network """
     def __init__(self, din):
         super(_RPN, self).__init__()
-        
         self.din = din  # get depth of input feature map, e.g., 512
-        self.anchor_scales = cfg.ANCHOR_SCALES
+        self.anchor_scales = cfg.ANCHOR_SCALES ##[8,16,32]
         self.anchor_ratios = cfg.ANCHOR_RATIOS
-        self.feat_stride = cfg.FEAT_STRIDE[0]
+        self.feat_stride = cfg.FEAT_STRIDE[0] ##16
 
         # define the convrelu layers processing input feature map
-        self.RPN_Conv = nn.Conv2d(self.din, 512, 3, 1, 1, bias=True)
+        self.RPN_Conv = nn.Conv2d(self.din, 512, 3, 1, 1, bias=True) 
+		##output is 512 channels, with 3*3kernels
 
         # define bg/fg classifcation score layer
         self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios) * 2 # 2(bg/fg) * 9 (anchors)
@@ -65,11 +65,11 @@ class _RPN(nn.Module):
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)
 
         rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
-        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1)
+        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1)##利用softmax生成概率
         rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
 
         # get rpn offsets to the anchor boxes
-        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
+        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)##利用卷积生成offsets
 
         # proposal layer
         cfg_key = 'TRAIN' if self.training else 'TEST'
@@ -87,7 +87,7 @@ class _RPN(nn.Module):
             rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
 
             # compute classification loss
-            rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)
+            rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)##torch.permute()将不同维度换位
             rpn_label = rpn_data[0].view(batch_size, -1)
 
             rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
@@ -95,7 +95,7 @@ class _RPN(nn.Module):
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())
             self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
-            fg_cnt = torch.sum(rpn_label.data.ne(0))
+            fg_cnt = torch.sum(rpn_label.data.ne(0))###作误分类loss
 
             rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
@@ -104,7 +104,6 @@ class _RPN(nn.Module):
             rpn_bbox_outside_weights = Variable(rpn_bbox_outside_weights)
             rpn_bbox_targets = Variable(rpn_bbox_targets)
 
-            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
-                                                            rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
+            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])##L1 loss
 
         return rois, self.rpn_loss_cls, self.rpn_loss_box
